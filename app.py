@@ -1,4 +1,6 @@
 # app.py
+import base64
+from io import StringIO
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta

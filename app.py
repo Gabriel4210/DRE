@@ -1,14 +1,15 @@
+# app.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import plotly.express as px
+import os
 
 # Importa módulos personalizados
 from src.data_manager import initialize_data, add_transaction, get_transactions
 from src.dre_calculator import calcular_dre
 from src.visualizations import criar_grafico_evolucao, criar_grafico_distribuicao_despesas
 from utils.validators import validar_formulario
-from utils.formatters import formatar_moeda
+from utils.formatters import formatar_moeda, formatar_data
 
 # Configuração da página
 st.set_page_config(
@@ -19,8 +20,17 @@ st.set_page_config(
 )
 
 # Inicializa o estado da sessão
-if 'data' not in st.session_state:
-    st.session_state.data = initialize_data()
+if 'data_initialized' not in st.session_state:
+    try:
+        # Tenta inicializar os dados
+        initialize_data()
+        st.session_state.data_initialized = True
+    except Exception as e:
+        st.error(f"Erro ao inicializar dados: {e}")
+        st.session_state.data_initialized = False
+
+# Lista de empresas (poderia vir de um banco de dados)
+empresas = ["Empresa A", "Empresa B", "Empresa C"]
 
 # Sidebar para navegação
 st.sidebar.title("DRE App")
@@ -29,8 +39,78 @@ pagina = st.sidebar.radio(
     ["Dashboard", "Lançamentos", "DRE", "Gráficos"]
 )
 
-# Lista de empresas (poderia vir de um banco de dados)
-empresas = ["Empresa A", "Empresa B", "Empresa C"]
+# Função para gerar dados de exemplo
+def gerar_dados_exemplo():
+    """Gera dados de exemplo para 6 meses e 2 empresas"""
+    import random
+    
+    # Empresas e tipos
+    empresas_exemplo = ["Empresa A", "Empresa B"]
+    
+    # Categorias por tipo
+    categorias = {
+        "Receita": ["Vendas", "Serviços", "Assinaturas", "Outros"],
+        "Custo": ["Matéria-prima", "Produção", "Logística", "Outros"],
+        "Despesa": ["Aluguel", "Salários", "Marketing", "Utilities", "Outros"]
+    }
+    
+    # Data inicial (6 meses atrás)
+    data_inicial = datetime.now() - timedelta(days=180)
+    
+    # Contador de transações
+    contador = 0
+    
+    # Gera transações para cada mês
+    for mes in range(6):
+        data_mes = data_inicial + timedelta(days=30 * mes)
+        
+        for empresa in empresas_exemplo:
+            # Gera receitas (3-5 por mês)
+            for _ in range(random.randint(3, 5)):
+                categoria = random.choice(categorias["Receita"])
+                valor = random.randint(3000, 8000)
+                
+                # Adiciona transação
+                add_transaction(
+                    empresa=empresa,
+                    data=(data_mes + timedelta(days=random.randint(1, 28))).strftime('%Y-%m-%d'),
+                    tipo="Receita",
+                    descricao=categoria,
+                    valor=valor
+                )
+                contador += 1
+            
+            # Gera custos (2-4 por mês)
+            for _ in range(random.randint(2, 4)):
+                categoria = random.choice(categorias["Custo"])
+                valor = random.randint(1000, 4000)
+                
+                # Adiciona transação
+                add_transaction(
+                    empresa=empresa,
+                    data=(data_mes + timedelta(days=random.randint(1, 28))).strftime('%Y-%m-%d'),
+                    tipo="Custo",
+                    descricao=categoria,
+                    valor=valor
+                )
+                contador += 1
+            
+            # Gera despesas (3-6 por mês)
+            for _ in range(random.randint(3, 6)):
+                categoria = random.choice(categorias["Despesa"])
+                valor = random.randint(500, 3000)
+                
+                # Adiciona transação
+                add_transaction(
+                    empresa=empresa,
+                    data=(data_mes + timedelta(days=random.randint(1, 28))).strftime('%Y-%m-%d'),
+                    tipo="Despesa",
+                    descricao=categoria,
+                    valor=valor
+                )
+                contador += 1
+    
+    return contador
 
 # Função para a página de Dashboard
 def pagina_dashboard():
@@ -48,9 +128,19 @@ def pagina_dashboard():
             key="dash_periodo"
         )
     
-    # Calcula o DRE para a empresa e período selecionados
+    # Carrega os dados
     df = get_transactions()
-    if not df.empty:
+    
+    # Verifica se há dados
+    if df.empty:
+        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos' ou use o botão abaixo para gerar dados de exemplo.")
+        
+        if st.button("Gerar Dados de Exemplo"):
+            contador = gerar_dados_exemplo()
+            st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
+            st.experimental_rerun()
+    else:
+        # Calcula o DRE para a empresa e período selecionados
         resultado_dre = calcular_dre(df, empresa, periodo)
         
         # Exibe cards com os totais
@@ -80,8 +170,6 @@ def pagina_dashboard():
         with col1:
             st.subheader("Distribuição de Despesas")
             st.plotly_chart(criar_grafico_distribuicao_despesas(df, empresa, periodo), use_container_width=True)
-    else:
-        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos'.")
 
 # Função para a página de Lançamentos
 def pagina_lancamentos():
@@ -105,19 +193,19 @@ def pagina_lancamentos():
         if submitted:
             # Valida o formulário
             if validar_formulario(empresa, data, tipo, descricao, valor):
-                # Adiciona a transação
-                transaction_id = add_transaction(
-                    empresa, 
-                    data.strftime('%Y-%m-%d'), 
-                    tipo, 
-                    descricao, 
-                    valor
-                )
-                
-                # Recarrega os dados
-                st.session_state.data = get_transactions()
-                
-                st.success(f"Lançamento registrado com sucesso! ID: {transaction_id}")
+                try:
+                    # Adiciona a transação
+                    transaction_id = add_transaction(
+                        empresa, 
+                        data.strftime('%Y-%m-%d'), 
+                        tipo, 
+                        descricao, 
+                        valor
+                    )
+                    
+                    st.success(f"Lançamento registrado com sucesso! ID: {transaction_id}")
+                except Exception as e:
+                    st.error(f"Erro ao salvar lançamento: {e}")
             else:
                 st.error("Por favor, preencha todos os campos corretamente.")
     
@@ -128,9 +216,21 @@ def pagina_lancamentos():
     if not df.empty:
         # Ordena por data decrescente e exibe os últimos 10
         df_sorted = df.sort_values(by='data', ascending=False).head(10)
-        st.dataframe(df_sorted)
+        
+        # Formata para exibição
+        df_display = df_sorted.copy()
+        df_display['data'] = df_display['data'].apply(lambda x: formatar_data(x))
+        df_display['valor'] = df_display['valor'].apply(lambda x: formatar_moeda(x))
+        
+        st.dataframe(df_display[['empresa', 'data', 'tipo', 'descricao', 'valor']])
     else:
         st.info("Não há lançamentos registrados.")
+        
+        # Botão para gerar dados de exemplo
+        if st.button("Gerar Dados de Exemplo"):
+            contador = gerar_dados_exemplo()
+            st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
+            st.experimental_rerun()
 
 # Função para a página de DRE
 def pagina_dre():
@@ -148,14 +248,32 @@ def pagina_dre():
             key="dre_periodo"
         )
     
-    # Calcula o DRE
+    # Carrega os dados
     df = get_transactions()
-    if not df.empty:
+    
+    # Verifica se há dados
+    if df.empty:
+        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos' ou use o botão abaixo para gerar dados de exemplo.")
+        
+        if st.button("Gerar Dados de Exemplo"):
+            contador = gerar_dados_exemplo()
+            st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
+            st.experimental_rerun()
+    else:
+        # Calcula o DRE
         resultado_dre = calcular_dre(df, empresa, periodo)
         
         # Exibe o DRE mensal
         st.subheader("DRE Mensal")
-        st.dataframe(resultado_dre['mensal'].style.format("{:.2f}"))
+        
+        # Formata o DRE para exibição
+        dre_display = resultado_dre['mensal'].copy()
+        
+        # Aplica formatação de moeda a todas as colunas
+        for coluna in dre_display.columns:
+            dre_display[coluna] = dre_display[coluna].apply(lambda x: formatar_moeda(x))
+        
+        st.dataframe(dre_display)
         
         # Exibe o DRE consolidado
         st.subheader("DRE Consolidado")
@@ -172,20 +290,23 @@ def pagina_dre():
             ]
         })
         
-        st.dataframe(dre_consolidado.style.format({'Valor': 'R$ {:.2f}'}))
+        # Formata os valores
+        dre_consolidado['Valor'] = dre_consolidado['Valor'].apply(lambda x: formatar_moeda(x))
+        
+        st.dataframe(dre_consolidado)
         
         # Botão para exportar
         if st.button("Exportar DRE (CSV)"):
-            # Cria um link para download
+            # Cria CSV
             csv = resultado_dre['mensal'].to_csv(index=True)
+            
+            # Cria botão de download
             st.download_button(
                 label="Clique para baixar",
                 data=csv,
-                file_name=f"dre_{empresa}_{periodo[0]}_{periodo[1]}.csv",
+                file_name=f"dre_{empresa}_{periodo[0].strftime('%Y-%m-%d')}_{periodo[1].strftime('%Y-%m-%d')}.csv",
                 mime="text/csv"
             )
-    else:
-        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos'.")
 
 # Função para a página de Gráficos
 def pagina_graficos():
@@ -209,8 +330,18 @@ def pagina_graficos():
         ["Evolução Mensal", "Distribuição de Despesas", "Comparação de Empresas"]
     )
     
+    # Carrega os dados
     df = get_transactions()
-    if not df.empty:
+    
+    # Verifica se há dados
+    if df.empty:
+        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos' ou use o botão abaixo para gerar dados de exemplo.")
+        
+        if st.button("Gerar Dados de Exemplo"):
+            contador = gerar_dados_exemplo()
+            st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
+            st.experimental_rerun()
+    else:
         if tipo_grafico == "Evolução Mensal":
             resultado_dre = calcular_dre(df, empresa, periodo)
             st.plotly_chart(criar_grafico_evolucao(resultado_dre['mensal']), use_container_width=True)
@@ -220,6 +351,9 @@ def pagina_graficos():
             
         elif tipo_grafico == "Comparação de Empresas":
             # Cria um gráfico comparativo entre empresas
+            st.subheader("Comparação entre Empresas")
+            
+            # Calcula DRE para cada empresa
             resultados = {}
             for emp in empresas:
                 resultado_dre = calcular_dre(df, emp, periodo)
@@ -232,15 +366,20 @@ def pagina_graficos():
                 'Valor': []
             })
             
-            for empresa, valores in resultados.items():
+            for empresa_nome, valores in resultados.items():
                 for metrica, valor in valores.items():
-                    df_comparacao = df_comparacao.append({
-                        'Empresa': empresa,
-                        'Métrica': metrica,
-                        'Valor': valor
-                    }, ignore_index=True)
+                    df_comparacao = pd.concat([
+                        df_comparacao, 
+                        pd.DataFrame({
+                            'Empresa': [empresa_nome],
+                            'Métrica': [metrica],
+                            'Valor': [valor]
+                        })
+                    ], ignore_index=True)
             
             # Cria gráfico de barras
+            import plotly.express as px
+            
             fig = px.bar(
                 df_comparacao, 
                 x='Empresa', 
@@ -252,8 +391,6 @@ def pagina_graficos():
             )
             
             st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Não há dados disponíveis. Adicione lançamentos na página 'Lançamentos'.")
 
 # Renderiza a página selecionada
 if pagina == "Dashboard":

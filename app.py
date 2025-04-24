@@ -231,7 +231,68 @@ def pagina_lancamentos():
             contador = gerar_dados_exemplo()
             st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
             st.experimental_rerun()
-    adicionar_secao_importacao_exportacao()
+    
+        # Adicione esta seção ao final da função
+    st.subheader("Importar/Exportar Dados")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Exportar Dados")
+        df_export = get_transactions()  # Obtém todos os dados atuais
+        if not df_export.empty:
+            # Função para gerar link de download
+            csv = df_export.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()
+            href = f'<a href="data:file/csv;base64,{b64}" download="dados_financeiros.csv">Baixar CSV</a>'
+            st.markdown(href, unsafe_allow_html=True)
+        else:
+            st.info("Não há dados para exportar.")
+    
+    with col2:
+        st.markdown("### Importar Dados")
+        uploaded_file = st.file_uploader("Escolha um arquivo CSV", type="csv")
+        
+        if uploaded_file is not None:
+            if st.button("Processar Importação"):
+                try:
+                    # Lê o arquivo enviado
+                    df_imported = pd.read_csv(uploaded_file)
+                    
+                    # Verifica se o arquivo tem as colunas necessárias
+                    required_columns = ['empresa', 'data', 'tipo', 'descricao', 'valor']
+                    missing_columns = [col for col in required_columns if col not in df_imported.columns]
+                    
+                    if missing_columns:
+                        st.error(f"Arquivo inválido. Colunas ausentes: {', '.join(missing_columns)}")
+                    else:
+                        # Se não tiver coluna 'id', adiciona IDs baseados no timestamp
+                        if 'id' not in df_imported.columns:
+                            base_timestamp = int(datetime.now().timestamp())
+                            df_imported['id'] = [base_timestamp + i for i in range(len(df_imported))]
+                        
+                        # Carrega os dados existentes
+                        DATA_PATH = "data/user_data.csv"  # Use o mesmo caminho definido no seu código
+                        if os.path.exists(DATA_PATH):
+                            df_existing = pd.read_csv(DATA_PATH)
+                            
+                            # Adicionar apenas os novos (evitando duplicatas de ID)
+                            existing_ids = set(df_existing['id'].values)
+                            new_records = df_imported[~df_imported['id'].isin(existing_ids)]
+                            df_combined = pd.concat([df_existing, new_records], ignore_index=True)
+                            
+                            # Salva o DataFrame combinado
+                            df_combined.to_csv(DATA_PATH, index=False)
+                        else:
+                            # Se não existir arquivo, salva o importado diretamente
+                            os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
+                            df_imported.to_csv(DATA_PATH, index=False)
+                        
+                        st.success(f"Importação concluída com sucesso! {len(df_imported)} registros processados.")
+                        st.experimental_rerun()
+                
+                except Exception as e:
+                    st.error(f"Erro ao importar dados: {str(e)}")
 
 # Função para a página de DRE
 def pagina_dre():

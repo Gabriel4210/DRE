@@ -45,7 +45,7 @@ def gerar_dados_exemplo():
     import random
     
     # Empresas e tipos
-    empresas_exemplo = ["Empresa A", "Empresa B"]
+    empresas_exemplo = ["🚗 Transmaster", "💵 JM"]
     
     # Categorias por tipo
     categorias = {

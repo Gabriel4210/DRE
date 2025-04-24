@@ -231,6 +231,7 @@ def pagina_lancamentos():
             contador = gerar_dados_exemplo()
             st.success(f"{contador} registros de exemplo foram gerados com sucesso!")
             st.experimental_rerun()
+    adicionar_secao_importacao_exportacao()
 
 # Função para a página de DRE
 def pagina_dre():

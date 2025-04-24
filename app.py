@@ -30,7 +30,7 @@ if 'data_initialized' not in st.session_state:
         st.session_state.data_initialized = False
 
 # Lista de empresas (poderia vir de um banco de dados)
-empresas = ["Empresa A", "Empresa B", "Empresa C"]
+empresas = ["🚗 Transmaster", "💵 JM"]
 
 # Sidebar para navegação
 st.sidebar.title("DRE App")
